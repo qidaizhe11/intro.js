@@ -77,7 +77,9 @@
       /* Hint button label */
       hintButtonLabel: 'Got it',
       /* Adding animation to hints? */
-      hintAnimation: true
+      hintAnimation: true,
+      // Multiple mode(show multiple intro single page)?
+      isMultiple: false
     };
   }
 
@@ -92,6 +94,8 @@
   function _introForElement(targetElm) {
     var introItems = [],
         self = this;
+
+    console.log("intro.js, _introForElement, start.");
 
     if (this._options.steps) {
       //use steps passed programmatically
@@ -202,73 +206,77 @@
 
     //add overlay layer to the page
     if(_addOverlayLayer.call(self, targetElm)) {
-      //then, start the show
-      _nextStep.call(self);
+      if (this._options.isMultiple) {
+        _showElements.call(self);
+      } else {
+        //then, start the show
+        _nextStep.call(self);
 
-      var skipButton     = targetElm.querySelector('.introjs-skipbutton'),
-          nextStepButton = targetElm.querySelector('.introjs-nextbutton');
+        var skipButton     = targetElm.querySelector('.introjs-skipbutton'),
+            nextStepButton = targetElm.querySelector('.introjs-nextbutton');
 
-      self._onKeyDown = function(e) {
-        if (e.keyCode === 27 && self._options.exitOnEsc == true) {
-          //escape key pressed, exit the intro
-          //check if exit callback is defined
-          if (self._introExitCallback != undefined) {
-            self._introExitCallback.call(self);
-          }
-          _exitIntro.call(self, targetElm);
-        } else if(e.keyCode === 37) {
-          //left arrow
-          _previousStep.call(self);
-        } else if (e.keyCode === 39) {
-          //right arrow
-          _nextStep.call(self);
-        } else if (e.keyCode === 13) {
-          //srcElement === ie
-          var target = e.target || e.srcElement;
-          if (target && target.className.indexOf('introjs-prevbutton') > 0) {
-            //user hit enter while focusing on previous button
-            _previousStep.call(self);
-          } else if (target && target.className.indexOf('introjs-skipbutton') > 0) {
-            //user hit enter while focusing on skip button
-            if (self._introItems.length - 1 == self._currentStep && typeof (self._introCompleteCallback) === 'function') {
-                self._introCompleteCallback.call(self);
-            }
-            //check if any callback is defined
+        self._onKeyDown = function(e) {
+          if (e.keyCode === 27 && self._options.exitOnEsc == true) {
+            //escape key pressed, exit the intro
+            //check if exit callback is defined
             if (self._introExitCallback != undefined) {
               self._introExitCallback.call(self);
             }
             _exitIntro.call(self, targetElm);
-          } else {
-            //default behavior for responding to enter
+          } else if(e.keyCode === 37) {
+            //left arrow
+            _previousStep.call(self);
+          } else if (e.keyCode === 39) {
+            //right arrow
             _nextStep.call(self);
+          } else if (e.keyCode === 13) {
+            //srcElement === ie
+            var target = e.target || e.srcElement;
+            if (target && target.className.indexOf('introjs-prevbutton') > 0) {
+              //user hit enter while focusing on previous button
+              _previousStep.call(self);
+            } else if (target && target.className.indexOf('introjs-skipbutton') > 0) {
+              //user hit enter while focusing on skip button
+              if (self._introItems.length - 1 == self._currentStep && typeof (self._introCompleteCallback) === 'function') {
+                self._introCompleteCallback.call(self);
+              }
+              //check if any callback is defined
+              if (self._introExitCallback != undefined) {
+                self._introExitCallback.call(self);
+              }
+              _exitIntro.call(self, targetElm);
+            } else {
+              //default behavior for responding to enter
+              _nextStep.call(self);
+            }
+
+            //prevent default behaviour on hitting Enter, to prevent steps being skipped in some browsers
+            if(e.preventDefault) {
+              e.preventDefault();
+            } else {
+              e.returnValue = false;
+            }
           }
+        };
 
-          //prevent default behaviour on hitting Enter, to prevent steps being skipped in some browsers
-          if(e.preventDefault) {
-            e.preventDefault();
-          } else {
-            e.returnValue = false;
+        self._onResize = function(e) {
+          _setHelperLayerPosition.call(self, document.querySelector('.introjs-helperLayer'));
+          _setHelperLayerPosition.call(self, document.querySelector('.introjs-tooltipReferenceLayer'));
+        };
+
+        if (window.addEventListener) {
+          if (this._options.keyboardNavigation) {
+            window.addEventListener('keydown', self._onKeyDown, true);
           }
+          //for window resize
+          window.addEventListener('resize', self._onResize, true);
+        } else if (document.attachEvent) { //IE
+          if (this._options.keyboardNavigation) {
+            document.attachEvent('onkeydown', self._onKeyDown);
+          }
+          //for window resize
+          document.attachEvent('onresize', self._onResize);
         }
-      };
-
-      self._onResize = function(e) {
-        _setHelperLayerPosition.call(self, document.querySelector('.introjs-helperLayer'));
-        _setHelperLayerPosition.call(self, document.querySelector('.introjs-tooltipReferenceLayer'));
-      };
-
-      if (window.addEventListener) {
-        if (this._options.keyboardNavigation) {
-          window.addEventListener('keydown', self._onKeyDown, true);
-        }
-        //for window resize
-        window.addEventListener('resize', self._onResize, true);
-      } else if (document.attachEvent) { //IE
-        if (this._options.keyboardNavigation) {
-          document.attachEvent('onkeydown', self._onKeyDown);
-        }
-        //for window resize
-        document.attachEvent('onresize', self._onResize);
       }
     }
     return false;
@@ -369,6 +377,8 @@
    * @param {Object} targetElement
    */
   function _exitIntro(targetElement) {
+    //console.log("intro.js, _exitIntro, targetElement:", targetElement);
+
     //remove overlay layer from the page
     var overlayLayer = targetElement.querySelector('.introjs-overlay');
 
@@ -385,16 +395,29 @@
       }
     }, 500);
 
-    //remove all helper layers
-    var helperLayer = targetElement.querySelector('.introjs-helperLayer');
-    if (helperLayer) {
-      helperLayer.parentNode.removeChild(helperLayer);
-    }
+    this._introItems.map((intro_element, i) => {
+      //remove all helper layers
+      var helperLayer = targetElement.querySelector(`.introjs-helperLayer-${i}`);
+      if (helperLayer) {
+        helperLayer.parentNode.removeChild(helperLayer);
+      }
 
-    var referenceLayer = targetElement.querySelector('.introjs-tooltipReferenceLayer');
-    if (referenceLayer) {
-      referenceLayer.parentNode.removeChild(referenceLayer);
-    }
+      var referenceLayer = targetElement.querySelector(`.introjs-tooltipReferenceLayer-${i}`);
+      if (referenceLayer) {
+        referenceLayer.parentNode.removeChild(referenceLayer);
+      }
+    });
+
+    ////remove all helper layers
+    //var helperLayer = targetElement.querySelector('.introjs-helperLayer');
+    //if (helperLayer) {
+    //  helperLayer.parentNode.removeChild(helperLayer);
+    //}
+    //
+    //var referenceLayer = targetElement.querySelector('.introjs-tooltipReferenceLayer');
+    //if (referenceLayer) {
+    //  referenceLayer.parentNode.removeChild(referenceLayer);
+    //}
     //remove disableInteractionLayer
     var disableInteractionLayer = targetElement.querySelector('.introjs-disableInteraction');
     if (disableInteractionLayer) {
@@ -765,14 +788,16 @@
    * @method _showElement
    * @param {Object} targetElement
    */
-  function _showElement(targetElement) {
+  function _showElement(targetElement, index) {
     if (typeof (this._introChangeCallback) !== 'undefined') {
       this._introChangeCallback.call(this, targetElement.element);
     }
 
+    //console.log("intro.js, _showElement, targetElement:", targetElement, "index:", index);
+
     var self = this,
-        oldHelperLayer = document.querySelector('.introjs-helperLayer'),
-        oldReferenceLayer = document.querySelector('.introjs-tooltipReferenceLayer'),
+        oldHelperLayer = document.querySelector(`.introjs-helperLayer-${index}`),
+        oldReferenceLayer = document.querySelector(`.introjs-tooltipReferenceLayer-${index}`),
         highlightClass = 'introjs-helperLayer',
         elementPosition = _getOffset(targetElement.element);
 
@@ -872,8 +897,8 @@
           progressLayer     = document.createElement('div'),
           buttonsLayer      = document.createElement('div');
 
-      helperLayer.className = highlightClass;
-      referenceLayer.className = 'introjs-tooltipReferenceLayer';
+      helperLayer.className = `${highlightClass} introjs-helperLayer-${index}`;
+      referenceLayer.className = `introjs-tooltipReferenceLayer introjs-tooltipReferenceLayer-${index}`;
 
       //set new position to helper layer
       _setHelperLayerPosition.call(self, helperLayer);
@@ -1091,6 +1116,14 @@
     if (typeof (this._introAfterChangeCallback) !== 'undefined') {
       this._introAfterChangeCallback.call(this, targetElement.element);
     }
+  }
+
+  function _showElements() {
+    this._introItems.map((intro_item, i) => {
+
+      this._currentStep = i;
+      _showElement.call(this, intro_item, i);
+    });
   }
 
   /**
